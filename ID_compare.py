@@ -12,7 +12,6 @@ DirIn =  '/astro/users/suberlak/S13Agg/'
 ######################################################
 
 
-
 # DETECTION DATA 
 coadd_data = pd.read_csv(DirIn+'iCoaddPhotometryAll.csv')
 

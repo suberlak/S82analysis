@@ -23,10 +23,22 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os 
+pd.options.mode.chained_assignment = None
+# to avoid  http://stackoverflow.com/questions/20625582/how-to-deal-with-this-pandas-warning
 
 # faint source treatment 
 from scipy.stats import norm
 from scipy.special import erf
+
+# variability 
+import sys
+sys.path.insert(0, '/astro/users/suberlak/S13Agg_analysis/packages/')
+import variabilityFunctions as varF
+reload(varF)
+from astroML.stats import median_sigmaG
+from astropy.time import Time 
+
+
 
 def calculate_mean(psfFlux, psfFluxErr):
     xObs = psfFlux / psfFluxErr
@@ -63,6 +75,7 @@ def calculate_rms(psfFlux, psfFluxErr):
 DirIn = '/astro/store/pogo4/s13_stripe82/forced_phot_lt_23/NCSA/'
 DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/'
 
+
 lProc = []
 lProc += [each for each in os.listdir(DirOut) if each.endswith('.csv')]
 
@@ -77,10 +90,28 @@ lToDoFilt =  np.array(lToDoComp)[~maskDone]
 for name in lToDoFilt : 
 	print('Processing filter_patch file %s' % name)
 
-	fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip', usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'])
+	# read in the raw lightcurve... 
+	fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip',  usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'])
+	#
+	##########  STEP 1 : single-epoch data ###########  
+	#
+
+	####  first drop all NaNs  in psfFlux...      
+	m1  = np.isnan(fp_data['psfFlux'])  # True if NaN  
+	m2 =  ~np.isfinite(fp_data['psfFlux']) #  True if not finite  
+	m  = m1 | m2  # a logical or 
+	if np.sum(m) > 0 :  # only apply if there is anything to drop ... 
+	    fp_data.drop(m.index[m], inplace=True)  # drop entire rows 
+	 
+	#### check to make sure that there are no NaN psfFluxErr... 
+	m1  = np.isnan(fp_data['psfFluxErr'])  # True if NaN  
+	m2 =  ~np.isfinite(fp_data['psfFluxErr']) #  True if not finite  
+	m  = m1 | m2  # a logical or 
+	if np.sum(m) > 0 :  # only apply if there is anything to drop ... 
+	    fp_data.drop(m.index[m], inplace=True)
 
 	# make a new column, fill with 0's
-	fp_data['flag'] = 0
+	fp_data['flagFaint'] = 0
 
 	# mask those rows that correspond to SNR < 2
 	mask = (fp_data['psfFlux'].values / fp_data['psfFluxErr'].values) < 2
@@ -89,7 +120,7 @@ for name in lToDoFilt :
 	print('There are %d points of %d that have SNR<2' %(np.sum(mask),len(mask)))
 
 	# set flag at those rows to 1
-	fp_data.ix[mask, 'flag'] = 1
+	fp_data.ix[mask, 'flagFaint'] = 1
 
 	# make new columns for  Mean  Median  2 sigma...
 	fp_data['faintMean'] = np.nan
@@ -106,13 +137,15 @@ for name in lToDoFilt :
 	# This replaces all rows where flag == 1
 	#rows = fp_data['flag'] == 1
 	#fp_data.ix[rows, 'psfFlux'] = fp_data.ix[rows, 'faintMean']
-
-	# save as a new csv....
-	path = DirOut+'Proc_'+name
-	print('Saving processed file to %s'% path)
-	fp_data.to_csv(path)  
+	# 
+	######################### SAVING OUTPUT 
+	# as a new csv....
+	#path = DirOut+'Proc_'+name
+	#print('Saving processed file to %s'% path)
+	#fp_data.to_csv(path)  
 
 	# Save the diagnostics..
+	path = DirOut+'Proc_'+name
 	diagFile = path+'.diag'
 	file = open(diagFile, "w")
 	file.write('Input :  \n')
@@ -130,6 +163,142 @@ for name in lToDoFilt :
 	s = '    '+ 'Proc_'+name + '\n\n'  
 	file.write(s)
 	file.close()   
-	
+
+	#
+	##########  STEP 2 : Derived Quantities ###########  
+	#
+
+	####  replace all psfFlux  where SNR < 2  with  faintMean  
+	rows = fp_data['flagFaint'] == 1
+	fp_data.ix[rows, 'psfFlux'] = fp_data.ix[rows, 'faintMean']
+
+	# group by objectId to calculate full LC variability characteristics 
+	grouped = fp_data.groupby('objectId')
+
+	#
+	#  Calculate low-order statistical properties of full lightcurves:
+	# 
+	#  psfFluxMean, psfFluxMeanErr, psfFluxMedian, psfFluxMedianErr
+	#  psfFluxStDev, psfFluxSigG , psfFluxSkew, avgMJD, rangeMJD   
+	#  chi2DOF , chi2R,  sigmaFull, muFull, flagLtTenPts
+	# 
+	varMetricsFull = grouped.apply(varF.computeVarMetrics)
+
+	# Calculate magnitudes based on average fluxes :
+	# psfMean  psfMedian  psfMeanErr  psfMedianErr 
+
+	def flux2absigma(flux, fluxsigma):
+	    """Compute AB mag sigma given flux and flux sigma"""
+	    FIVE_OVER_2LOG10 = 1.085736204758129569
+	    return FIVE_OVER_2LOG10 * fluxsigma / flux;
+
+
+	def flux2ab(flux):
+	    """Compute AB mag given flux"""
+	    return -2.5 * np.log10(flux) - 48.6;
+
+
+
+	varMetricsFull['psfMean'] = flux2ab(varMetricsFull['psfFluxMean'])
+	varMetricsFull['psfMedian'] = flux2ab(varMetricsFull['psfFluxMedian'])
+	varMetricsFull['psfMeanErr'] = flux2absigma(varMetricsFull['psfFluxMean'],varMetricsFull['psfFluxMeanErr'])
+	varMetricsFull['psfMedianErr'] = flux2absigma(varMetricsFull['psfFluxMedian'],varMetricsFull['psfFluxMedianErr'])
+
+	#
+	######################### SAVING OUTPUT        ######################### 
+	# 
+	path = DirOut +'Var/'+ 'Var'+name
+	varMetricsFull.to_csv(path)
+	print('Saving Full, unbinned  LC statistics to %s'%path)
+
+	#
+	##########  STEP 3 : Variable Candidates ###########  
+	# 
+
+	#
+	# for variable candidates we calculate  metrics for 
+	# points per season, as well as bin the lightcurve 
+	# into seasons, and calculate the metrics of binned 
+	# lightcurve 
+	# 
+
+	# Check how many sources  are variable... 
+	# i.e. have either  sigma > 0 or chi2 > 1
+	m1 = (varMetricsFull['sigmaFull'] > 0).values
+	m2 =  (varMetricsFull['chi2DOF'] > 1).values
+	m3 = (varMetricsFull['chi2R'] > 1).values
+	m= np.ma.mask_or(m3, np.ma.mask_or(m1,m2))
+	print('Out of %d objects,  %d fulfill  sigma>0 or chi2R>1 or chi2DOF>1' % (len(m), np.sum(m)))
+
+	# save the diagnostics about variability to a file...
+	diagFile = path+'.diag'
+	file = open(diagFile, "w")
+	file.write('Input :  \n')
+	s = '    '+ DirIn + '\n' 
+	file.write(s)
+	s = '    '+ name + '\n\n'
+	file.write(s)
+	s = 'There are '+str(np.sum(m)) + ' points out of ' + str(len(m)) + ' that fulfill sigma>0 or chi2R>1 or chi2DOF>1 \n '
+	file.write(s)
+	file.write('Output :  \n')
+	s = '    '+ DirOut + '\n' 
+	file.write(s)
+	s = '    '+ 'Var'+name + '\n\n'  
+	file.write(s)
+	file.close()   
+
+
+	# Grab names of variable objects, that fulfill the criteria above... 
+	varObjectIds = varMetricsFull[m].index
+
+	# Grab only those rows that correspond to variable objects...
+	rows = np.in1d(fp_data['objectId'].values, varObjectIds)
+	fp_var = fp_data.ix[rows] 
+
+	# make a new column to designate seasons...
+	fp_var['season'] = np.nan
+
+	# I insert a very early date at the beginning of the list, so that all obs between
+	# 1990 and 2005 are clustered together, and 2005-2006, 2006-2007, etc are 
+	# averaged seasonally (season starts August 1st)
+
+	dates = [str(year)+'-08-01 00:00:00.000' for year in np.arange(2005,2009)]
+	dates.insert(0,'1990-08-01 00:00:00.000' )
+	cutDates = Time(dates, format='iso')
+	seasons = np.arange(len(cutDates))+0 
+
+	# Assign value of a season for each row...
+	for i in range(len(cutDates.mjd)-1):
+	    mask = (fp_var['mjd'].values > cutDates[i].mjd) * (fp_var['mjd'].values < cutDates[i+1].mjd)
+	    fp_var.ix[mask, 'season'] = seasons[i]  
+	 
+	# Calculate seasonal metrics for objects that are variable (based on their full LC...) 
+	grouped = fp_var.groupby(['objectId','season'])
+
+	varMetricsSeasonal = grouped.apply(varF.computeVarMetrics)
+	#
+	######################### SAVING OUTPUT        ######################### 
+	#
+	path = DirOut + 'SeasVar'+name
+	varMetricsSeasonal.to_csv(path)
+	print('Saving Seasonal statistics to %s'%path)
+
+	# Calculate binned lightcurve metrics (binned by seasons)
+	grouped  = varMetricsSeasonal.groupby(level=0)
+	#grouped.get_group(grouped.groups.keys()[0])['psfFluxMean'].values
+
+	varMetricsFullSeasonal = grouped.apply(varF.ComputeVarFullBinned)
+	#
+	######################### SAVING OUTPUT        ######################### 
+	#
+	path = DirOut + 'FullSeasVar'+name
+	varMetricsSeasonal.to_csv(path)
+	print('Saving Full Seasonally binned LC statistics to %s'%path)
+	   
+	   
+
+
+
+
 
 

@@ -146,21 +146,7 @@ varMetricsSeasonal.to_csv(path)
 print('Saving Seasonal Variability statistics to %s'%path)
 
 
-def ComputeVarMetricsSeasonal(group): 
-    
-    ''' A function to calculate averages for the full lightcurve based on lightcurve averages   
-    '''
-    #mu,sigma = get_mu_sigma(group['psfFlux'].values*1e27, group['psfFluxErr'].values*1e27)
-    #rangeMJD = group['mjd'].values.max() - group['mjd'].values.min() 
-    
-    return pd.Series({'Nseasons':group['psfFluxMean'].count(),
-                      'psfFluxMeanMean': group['psfFluxMean'].mean(),
-                      'psfFluxErrMeanMean' : group['psfFluxErrMean'].mean(),
-                      'chi2DOFmean' : calcChi2raw(group['psfFluxMean'].values,group['psfFluxErrMean'].values),
-                      'chi2DOFmedian' : calcChi2raw(group['psfFluxMedian'].values,group['psfFluxErrMean'].values),
-                      'chi2Rmean' : calcChi2robust(group['psfFluxMean'].values,group['psfFluxErrMean'].values),
-                      'chi2Rmedian' : calcChi2robust(group['psfFluxMedian'].values,group['psfFluxErrMean'].values)
-                     })
+
 
 
 grouped  = varMetricsSeasonal.groupby(level=0)

@@ -1,3 +1,4 @@
+# -*- coding: iso-8859-1 -*-
 #
 # Functions used to calculate variability parameters 
 #
@@ -48,7 +49,7 @@ def approximate_mu_sigma(xi, ei, axis=None):
 
 
 
-def get_mu_sigma(xi,ei):
+def get_mu_sigma(xi,ei, N_boot=1000):
     ''' A short function
     to calculate a full mu, sigma, based 
     on 10,000 bootstraps of the given sample
@@ -68,7 +69,7 @@ def get_mu_sigma(xi,ei):
     '''
 
     # Calculate bootstrapped approximate.... 
-    N_boot = 10000
+    #print N_boot
     indices = np.random.randint(0, len(xi), (len(xi), N_boot))
 
     xi_boot = xi[indices]
@@ -78,14 +79,25 @@ def get_mu_sigma(xi,ei):
 
 
     # Calculate marginalized likelihood sigma and mu
+    # using as boundaries the minimum and maximum result of the 
+    # bootstrapped approximate calculation 
+ 
     max_factor = 1.0
     sigma = np.linspace(min(sigma_boot), max_factor*max(sigma_boot), 70)
     mu = np.linspace(min(mu_boot), max_factor*max(mu_boot), 70)
+    
+    if (len(mu) == 0) | (len(sigma) == 0) : 
+        # for some reason we may be completely missing it... 
+        return np.nan, np.nan 
 
     logL = gaussgauss_logL(xi, ei, mu, sigma[:, np.newaxis])
     logL -= logL.max()
     ind = np.where(logL == np.max(logL))
     
+    if len(ind) < 2  : 
+        # for some reason, we may be unable to find the maximum...
+        return np.nan, np.nan
+
     # return the mu and sigma at the maximum of the likelihood
     # (note : I assume log-likelihood is smooth, and has only 
     # one maximum )
@@ -213,7 +225,7 @@ def computeVarMetrics(group):
     elif N == 1  :
         mu, sigma = Flux, 0
     else : 
-        mu, sigma = get_mu_sigma(Flux*1e27, FluxErr*1e27)
+        mu, sigma = get_mu_sigma(Flux*1e27, FluxErr*1e27,1000)
 
     # set the flag about length...
     if N > 10 : 
@@ -243,15 +255,29 @@ def computeVarMetrics(group):
 def ComputeVarFullBinned(group): 
     
     ''' A function to calculate averages for the full lightcurve binned into seasons 
-    '''
-    mu,sigma = get_mu_sigma(group['psfFluxMean'].values*1e27, group['psfFluxMeanErr'].values*1e27)
-    
+    '''    
+    Flux= group['psfFluxMean'].values
+    FluxErr =group['psfFluxMeanErr'].values
+
+    N = len(Flux)
+    if N == 0 : 
+        mu = np.nan
+        sigma = np.nan
+    elif N == 1  :
+        mu, sigma = Flux, 0
+    else : 
+        mu, sigma = get_mu_sigma(Flux*1e27, FluxErr*1e27, 1000)
+
+    FluxMean = calcWeightedMean(Flux,FluxErr)
+    FluxMeanErr = calcWeightedMeanErr(FluxErr)
+    psfFluxStDev = calcWeightedStDev(Flux,FluxErr, FluxMean)
+
     return pd.Series({'Nseasons':group['psfFluxMean'].count(),
-                      'psfFluxMeanMean': group['psfFluxMean'].mean(),
-                      'psfFluxMeanErrMean' : group['psfFluxMeanErr'].mean(),
-                      'chi2DOFmean' : calcChi2raw(group['psfFluxMean'].values,group['psfFluxMeanErr'].values),
+                      'psfFluxMeanMean': FluxMean, 
+                      'psfFluxMeanMeanErr' :FluxMeanErr,
+                      'chi2DOFmean' : calcChi2raw(Flux,FluxErr),
                       'chi2DOFmedian' : calcChi2raw(group['psfFluxMedian'].values,group['psfFluxMedianErr'].values),
-                      'chi2Rmean' : calcChi2robust(group['psfFluxMean'].values,group['psfFluxMeanErr'].values),
+                      'chi2Rmean' : calcChi2robust(Flux,FluxErr),
                       'chi2Rmedian' : calcChi2robust(group['psfFluxMedian'].values,group['psfFluxMedianErr'].values),
                       'sigmaFull' :sigma,
                       'muFull' :mu

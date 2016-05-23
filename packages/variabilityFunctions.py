@@ -89,20 +89,20 @@ def get_mu_sigma(xi,ei, N_boot=1000):
     if (len(mu) == 0) | (len(sigma) == 0) : 
         # for some reason we may be completely missing it... 
         return np.nan, np.nan 
-
-    logL = gaussgauss_logL(xi, ei, mu, sigma[:, np.newaxis])
-    logL -= logL.max()
-    ind = np.where(logL == np.max(logL))
+    else : 
+        logL = gaussgauss_logL(xi, ei, mu, sigma[:, np.newaxis])
+        logL -= logL.max()
+        ind = np.where(logL == np.max(logL))
     
-    if len(ind) < 2  : 
-        # for some reason, we may be unable to find the maximum...
-        return np.nan, np.nan
-
-    # return the mu and sigma at the maximum of the likelihood
-    # (note : I assume log-likelihood is smooth, and has only 
-    # one maximum )
-    
-    return mu[ind[1]][0], sigma[ind[0]][0]
+        if len(ind) < 2  : 
+            # for some reason, we may be unable to find the maximum...
+            return np.nan, np.nan
+              
+        else : 
+            # return the mu and sigma at the maximum of the likelihood
+            # (note : I assume log-likelihood is smooth, and has only 
+            # one maximum )
+            return mu[ind[1]][0], sigma[ind[0]][0]
 
 def calcChi2raw(y, yerr):
     """Compute simple reduced chi2  (mean-based) if more than 1 datapoints present
@@ -203,8 +203,8 @@ def computeVarMetrics(group):
     rangeMJD = group['mjd'].values.max() - group['mjd'].values.min() 
     
     
-    Flux= group['psfFlux'].values
-    FluxErr =group['psfFluxErr'].values
+    Flux = group['psfFlux'].values
+    FluxErr = group['psfFluxErr'].values
     
     # calculate Weighted  Mean
      

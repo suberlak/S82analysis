@@ -52,7 +52,7 @@ def approximate_mu_sigma(xi, ei, axis=None):
 def get_mu_sigma(xi,ei, N_boot=1000):
     ''' A short function
     to calculate a full mu, sigma, based 
-    on 10,000 bootstraps of the given sample
+    on N_boot bootstraps of the given sample
     with approximate method, 
     and then calculating the 2D maximum of the
     log-likelihood calculated on the space spanning
@@ -62,7 +62,7 @@ def get_mu_sigma(xi,ei, N_boot=1000):
     Input:
     xi : array of measurement values (assumed flux, i.e. order 1e-27)
     ei ; array of measurement errors (same order of mag as xi)
-    
+    N_boot : integer, representing the number of bootstraps 
     Returns:
     mu_max : mu calculated as a maximum of the 2D log-likelihood 
     sig_mag : sigma calculated as a maximum of the 2D log-likelihood 
@@ -199,6 +199,16 @@ def computeVarMetrics(group):
     all points in a given season 
     
     '''
+    # print diagnostic for figuring out error...
+    #print 'objectId= ', group['objectId'].values[0]
+    
+    # even though I drop NaNs before, I do it here explicitly to save 
+    # me from headaches 
+    # eg. obj  216199180459189485    216199180459189485
+    # have one row with NaN , not caught by other filters... 
+
+    group.dropna(subset=['psfFlux', 'psfFluxErr'], inplace=True)
+
     # calculate range of dates in a given lightcurve    
     rangeMJD = group['mjd'].values.max() - group['mjd'].values.min() 
     
@@ -223,7 +233,7 @@ def computeVarMetrics(group):
         mu = np.nan
         sigma = np.nan
     elif N == 1  :
-        mu, sigma = Flux, 0
+        mu, sigma = Flux[0], 0
     else : 
         mu, sigma = get_mu_sigma(Flux*1e27, FluxErr*1e27,1000)
 

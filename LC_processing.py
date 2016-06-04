@@ -58,7 +58,7 @@ DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/
 lProc = []
 lProc += [each for each in os.listdir(DirOut) if each.endswith('.csv')]
 
-lProc = [name[5:] for name in lProc]
+lProc = [name[5:-5] for name in lProc]
 lToDo = os.listdir(DirIn)
 lToDoComp = [name[:-3] for name in lToDo]
 if len(lProc) > 0 : 
@@ -68,7 +68,6 @@ else:
     lToDoFilt = lToDoComp
 
 def process_patch(name):
-
     print('Processing filter_patch file %s' % name)
 
     # read in the raw lightcurve... 
@@ -183,7 +182,6 @@ def process_patch(name):
     varMetricsFull['psfMedian'] = flux2ab(varMetricsFull['psfFluxMedian'])
     varMetricsFull['psfMeanErr'] = flux2absigma(varMetricsFull['psfFluxMean'],varMetricsFull['psfFluxMeanErr'])
     varMetricsFull['psfMedianErr'] = flux2absigma(varMetricsFull['psfFluxMedian'],varMetricsFull['psfFluxMedianErr'])
-
     #
     ######################### SAVING OUTPUT        ######################### 
     # 
@@ -273,12 +271,12 @@ def process_patch(name):
 
     # Assign value of a season for each row...
     for i in range(len(cutDates.mjd)-1):
-      mask = (fp_var['mjd'].values > cutDates[i].mjd) * (fp_var['mjd'].values < cutDates[i+1].mjd)
-      fp_var.ix[mask, 'season'] = seasons[i]  
+        mask = (fp_var['mjd'].values > cutDates[i].mjd) * (fp_var['mjd'].values < cutDates[i+1].mjd)
+        fp_var.ix[mask, 'season'] = seasons[i]  
 
     # Calculate seasonal metrics for objects that are variable (based on their full LC...) 
     grouped = fp_var.groupby(['objectId','season'])
-
+    print('Calculating Seasonal metrics for %s ...'%name)
     varMetricsSeasonal = grouped.apply(varF.computeVarMetrics)
     #
     ######################### SAVING OUTPUT        ######################### 

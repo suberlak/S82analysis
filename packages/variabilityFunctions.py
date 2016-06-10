@@ -181,7 +181,7 @@ def calcWeightedStDev(y, yerr, yWmean):
         return np.nan 
     else :     
         weights=1.0 / ( yerr *yerr)
-        return np.sqrt((N / (N-1.0) ) * (np.sum(weights * ((y - yWmean) ** 2.0)) / np.sum(weights)))  
+        return np.sqrt((1 / (N-1.0) ) * (np.sum(weights * ((y - yWmean) ** 2.0)) / np.sum(weights)))  
 
 def calcSigmaG(y):
     ''' Calculate the  interquartile sigma.'''
@@ -200,15 +200,18 @@ def computeVarMetrics(group):
     
     '''
     # print diagnostic for figuring out error...
-    #print 'objectId= ', group['objectId'].values[0]
+    print 'objectId= ', group['objectId'].values[0]
     
     # even though I drop NaNs before, I do it here explicitly to save 
     # me from headaches 
-    # eg. obj  216199180459189485    216199180459189485
+    # eg. obj  216199180459189485   
     # have one row with NaN , not caught by other filters... 
-
-    group.dropna(subset=['psfFlux', 'psfFluxErr'], inplace=True)
-
+    # and for some reason, can't use here  group.dropna(..., inplace=True) !   
+    # group.dropna(subset=['psfFlux', 'psfFluxErr'], inplace=True)
+    group = group.replace([np.inf, -np.inf], np.nan)
+    group = group.dropna(subset=['psfFlux', 'psfFluxErr'])
+    
+    
     # calculate range of dates in a given lightcurve    
     rangeMJD = group['mjd'].values.max() - group['mjd'].values.min() 
     

@@ -200,7 +200,7 @@ def computeVarMetrics(group):
     
     '''
     # print diagnostic for figuring out error...
-    print 'objectId= ', group['objectId'].values[0]
+    #print 'objectId= ', group['objectId'].values[0]
     
     # even though I drop NaNs before, I do it here explicitly to save 
     # me from headaches 
@@ -212,7 +212,7 @@ def computeVarMetrics(group):
     group = group.dropna(subset=['psfFlux', 'psfFluxErr'])
     
     
-    # calculate range of dates in a given lightcurve    
+    # calculate range    dates in a given lightcurve    
     rangeMJD = group['mjd'].values.max() - group['mjd'].values.min() 
     
     

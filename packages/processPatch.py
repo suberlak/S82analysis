@@ -3,6 +3,7 @@ import numpy as np
 import os 
 import sys
 sys.path.insert(0, '/astro/users/suberlak/S13Agg_analysis/packages/')
+pd.options.mode.chained_assignment = None
 
 # faint source treatment 
 import faintFunctions as faintF 
@@ -13,13 +14,18 @@ import variabilityFunctions as varF
 from astroML.stats import median_sigmaG
 from astropy.time import Time
 
-def process_patch(name, DirIn, DirOut):
+def process_patch(name, DirIn, DirOut, limitNrows=None):
     print('Processing filter_patch file %s' % name)
     #DirIn = '/astro/store/pogo4/s13_stripe82/forced_phot_lt_23/NCSA/'
     #DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/'
 
     # read in the raw lightcurve... 
-    fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip',  usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'])
+    if limitNrows is not None:
+        fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip',  
+                     usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'], nrows=limitNrows)
+    else : 
+        fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip',  
+                     usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'])
     #
     ##########  STEP 1 : single-epoch data ###########  
     #
@@ -57,6 +63,7 @@ def process_patch(name, DirIn, DirOut):
     fp_data['faintTwoSigma'] = np.nan
     fp_data['faintRMS'] = np.nan
     # calculate the faint replacement only for faint points...
+    print('Faint points treatment...')
     fp_data.ix[mask, 'faintMean'] = faintF.calculate_mean(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
     fp_data.ix[mask, 'faintMedian'] = faintF.calculate_median(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
     fp_data.ix[mask, 'faintTwoSigma'] = faintF.calculate_2sigma(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
@@ -74,6 +81,7 @@ def process_patch(name, DirIn, DirOut):
     #fp_data.to_csv(path)  
 
     # Save the diagnostics..
+    print('Saving the diagnostics...')
     path = DirOut+'Proc_'+name
     diagFile = path+'.diag'
     file = open(diagFile, "w")
@@ -87,9 +95,7 @@ def process_patch(name, DirIn, DirOut):
     s = '( SNR = psfFlux / psfFluxErr ) \n \n'
     file.write(s)
     file.write('Output :  \n')
-    s = '    '+ DirOut + '\n' 
-    file.write(s)
-    s = '    '+ 'Proc_'+name + '\n\n'  
+    s = '    '+ DirOut +'Var/'+ 'Var'+name+ '\n'  
     file.write(s)
     file.close()   
 
@@ -102,6 +108,7 @@ def process_patch(name, DirIn, DirOut):
     fp_data.ix[rows, 'psfFlux'] = fp_data.ix[rows, 'faintMean']
 
     # group by objectId to calculate full LC variability characteristics 
+    print('Calculating the full LC statistics...')
     grouped = fp_data.groupby('objectId')
 
     #
@@ -111,7 +118,9 @@ def process_patch(name, DirIn, DirOut):
     #  psfFluxStDev, psfFluxSigG , psfFluxSkew, avgMJD, rangeMJD   
     #  chi2DOF , chi2R,  sigmaFull, muFull, flagLtTenPts
     # 
+    
     varMetricsFull = grouped.apply(varF.computeVarMetrics)
+    print('Calculating metrics for full lightcurves is finished')
 
     # Calculate magnitudes based on average fluxes :
     # psfMean  psfMedian  psfMeanErr  psfMedianErr 
@@ -125,17 +134,19 @@ def process_patch(name, DirIn, DirOut):
     def flux2ab(flux):
       """Compute AB mag given flux"""
       return -2.5 * np.log10(flux) - 48.6;
-
+    
     varMetricsFull['psfMean'] = flux2ab(varMetricsFull['psfFluxMean'])
     varMetricsFull['psfMedian'] = flux2ab(varMetricsFull['psfFluxMedian'])
     varMetricsFull['psfMeanErr'] = flux2absigma(varMetricsFull['psfFluxMean'],varMetricsFull['psfFluxMeanErr'])
     varMetricsFull['psfMedianErr'] = flux2absigma(varMetricsFull['psfFluxMedian'],varMetricsFull['psfFluxMedianErr'])
+    print('Calculating magnitudes from fluxes is finished')
     #
     ######################### SAVING OUTPUT        ######################### 
     # 
     path = DirOut +'Var/'+ 'Var'+name
+    print('Saving varMetricsFull...')
     varMetricsFull.to_csv(path)
-    print('Saving Full, unbinned  LC statistics to %s'%path)
+    print('Saved Full, unbinned  LC statistics to %s'%path)
 
     #
     ##########  STEP 3 : Variable Candidates ###########  
@@ -239,7 +250,7 @@ def process_patch(name, DirIn, DirOut):
     # Calculate binned lightcurve metrics (binned by seasons)
     grouped  = varMetricsSeasonal.groupby(level=0)
     #grouped.get_group(grouped.groups.keys()[0])['psfFluxMean'].values
-
+    print('Calculating Seasonally Binned LC statistics')
     varMetricsFullSeasonal = grouped.apply(varF.ComputeVarFullBinned)
     #
     ######################### SAVING OUTPUT        ######################### 

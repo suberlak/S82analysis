@@ -60,10 +60,10 @@ DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/
 
 # Get only those done first, because then you can at least get working on colors, etc ! 
 
-n = '66_87'  #'44_65' #'22_43'
-
-for filter in 'ugriz':
-    lToDoFilt.append(filter + n + '.csv')
+    #'66_87'  #'44_65' #'22_43'
+for n in ['88_109','110_131', '132_153', '154_175',  '176_181', '365_387', '388_409']:
+    for filter in 'ugriz':
+        lToDoFilt.append(filter + n + '.csv')
     
 #lToDoFilt = ['g00_21.csv', 'r00_21.csv','i00_21.csv','u00_21.csv','z00_21.csv']
 

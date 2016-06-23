@@ -200,7 +200,7 @@ def computeVarMetrics(group):
     
     '''
     # print diagnostic for figuring out error...
-    #print 'objectId= ', group['objectId'].values[0]
+    print 'objectId= ', group['objectId'].values[0]
     
     # even though I drop NaNs before, I do it here explicitly to save 
     # me from headaches 
@@ -208,7 +208,7 @@ def computeVarMetrics(group):
     # have one row with NaN , not caught by other filters... 
     # and for some reason, can't use here  group.dropna(..., inplace=True) !   
     # group.dropna(subset=['psfFlux', 'psfFluxErr'], inplace=True)
-    group = group.replace([np.inf, -np.inf], np.nan)
+    group = group.replace([np.inf, -np.inf, 0], np.nan)
     group = group.dropna(subset=['psfFlux', 'psfFluxErr'])
     
     

@@ -42,8 +42,8 @@ import processPatch as procP
 ####  
 
 
-DirIn = '/astro/store/pogo4/s13_stripe82/forced_phot_lt_23/NCSA/'
-DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/'
+DirIn = '/astro/store/pogo4/s13_stripe82/forced_phot_lt_23/IN2P3/'
+DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/IN2P3/'
 
 
 #lProc = []
@@ -61,7 +61,10 @@ DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/
 # Get only those done first, because then you can at least get working on colors, etc ! 
 
     #'66_87'  #'44_65' #'22_43'
-for n in ['88_109','110_131', '132_153', '154_175',  '176_181', '365_387', '388_409']:
+lToDoFilt= []
+#  ['88_109','110_131', '132_153', '154_175',  '176_181', '365_387', '388_409'] 
+for n in ['155_176', '176_197','197_218', '218_239', '239_260', '260_281', '281_302', 
+          '302_323','323_344', '344_365', '365_386']  :
     for filter in 'ugriz':
         lToDoFilt.append(filter + n + '.csv')
     

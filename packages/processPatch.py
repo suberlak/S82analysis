@@ -1,3 +1,4 @@
+# -*- coding: iso-8859-1 -*-
 import pandas as pd
 import numpy as np
 import os 
@@ -38,13 +39,19 @@ def process_patch(name, DirIn, DirOut, limitNrows=None):
         fp_data.drop(m.index[m], inplace=True)  # drop entire rows 
         print('Okay, we dropped %d rows where psfFlux is NaN or inf'%np.sum(m))
 
-    #### check to make sure that there are no NaN psfFluxErr... 
+    #### check to make sure that there are no NaN or 0 psfFluxErr... 
     m1  = np.isnan(fp_data['psfFluxErr'])  # True if NaN  
-    m2 =  ~np.isfinite(fp_data['psfFluxErr']) #  True if not finite  
-    m  = m1 | m2  # a logical or 
+    m2 =  ~np.isfinite(fp_data['psfFluxErr']) #  True if not finite
+    m3 =   fp_data['psfFluxErr'].values == 0 # True if Err == 0  (IN2P3 problem...)
+    m  = m1 | m2 | m3  # a logical or 
     if np.sum(m) > 0 :  # only apply if there is anything to drop ... 
         fp_data.drop(m.index[m], inplace=True)
         print('Okay, we dropped %d rows where psfFluxErr is NaN or inf'%np.sum(m))
+
+    #### check to make sure there are no  0  psfFluxErr ...
+    # --> fill with the  median error if it is 0 
+    
+
     # make a new column, fill with 0's
     fp_data['flagFaint'] = 0
 

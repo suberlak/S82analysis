@@ -6,14 +6,21 @@ import sys
 sys.path.insert(0, '/astro/users/suberlak/S13Agg_analysis/packages/')
 pd.options.mode.chained_assignment = None
 
+# God, Relieve me of the bondage of self,
+# that I may better do Thy will.
+# Take away my difficulties,
+# that victory over them may bear witness
+# to those I would help of Thy Power,
+# Thy Love, and Thy Way of life.
+# May I do Thy will always!
+
 # faint source treatment 
 import faintFunctions as faintF 
 
 # variability 
 print('I see that line...') 
 import variabilityFunctions as varF
-from astroML.stats import median_sigmaG
-from astropy.time import Time
+reload(varF)
 
 def process_patch(name, DirIn, DirOut, limitNrows=None):
     print('Processing filter_patch file %s' % name)
@@ -47,10 +54,6 @@ def process_patch(name, DirIn, DirOut, limitNrows=None):
     if np.sum(m) > 0 :  # only apply if there is anything to drop ... 
         fp_data.drop(m.index[m], inplace=True)
         print('Okay, we dropped %d rows where psfFluxErr is NaN or inf'%np.sum(m))
-
-    #### check to make sure there are no  0  psfFluxErr ...
-    # --> fill with the  median error if it is 0 
-    
 
     # make a new column, fill with 0's
     fp_data['flagFaint'] = 0
@@ -265,5 +268,109 @@ def process_patch(name, DirIn, DirOut, limitNrows=None):
     path = DirOut + 'Var/'+ 'FullSeasVar'+name
     varMetricsFullSeasonal.to_csv(path)
     print('Saving Full Seasonally binned LC statistics to %s'%path)
+
+
+
+def process_patch_minimal(name, DirIn, DirOut, limitNrows=None):
+    ''' A variation of process_patch : ONLY calculate sigma, mu , 
+    based on psfMag and psfMagErr,  i.e.  psfFlux, psfFluxErr 
+    after faint point treatment, translated to magnitudes  
+    '''
+    print('Processing filter_patch file %s' % name)
+    #DirIn = '/astro/store/pogo4/s13_stripe82/forced_phot_lt_23/NCSA/'
+    #DirOut = '/astro/store/scratch/tmp/suberlak/s13_stripe82/forced_phot_lt_23/NCSA/'
+
+    # read in the raw lightcurve... 
+    if limitNrows is not None:
+        fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip',  
+                     usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'], nrows=limitNrows)
+    else : 
+        fp_data = pd.read_csv(DirIn+name+'.gz', compression='gzip',  
+                     usecols=['objectId', 'mjd', 'psfFlux', 'psfFluxErr'])
+    #
+    ##########  STEP 1 : single-epoch data ###########  
+    #
+
+    ####  first drop all NaNs  in psfFlux...      
+    m1  = np.isnan(fp_data['psfFlux'])  # True if NaN  
+    m2 =  ~np.isfinite(fp_data['psfFlux']) #  True if not finite  
+    m  = m1 | m2  # a logical or 
+    if np.sum(m) > 0 :  # only apply if there is anything to drop ... 
+        fp_data.drop(m.index[m], inplace=True)  # drop entire rows 
+        print('Okay, we dropped %d rows where psfFlux is NaN or inf'%np.sum(m))
+
+    #### check to make sure that there are no NaN or 0 psfFluxErr... 
+    m1  = np.isnan(fp_data['psfFluxErr'])  # True if NaN  
+    m2 =  ~np.isfinite(fp_data['psfFluxErr']) #  True if not finite
+    m3 =   fp_data['psfFluxErr'].values == 0 # True if Err == 0  (IN2P3 problem...)
+    m  = m1 | m2 | m3  # a logical or 
+    if np.sum(m) > 0 :  # only apply if there is anything to drop ... 
+        fp_data.drop(m.index[m], inplace=True)
+        print('Okay, we dropped %d rows where psfFluxErr is NaN or inf'%np.sum(m))
+
+    # make a new column, fill with 0's
+    fp_data['flagFaint'] = 0
+
+    # mask those rows that correspond to SNR < 2
+    mask = (fp_data['psfFlux'].values / fp_data['psfFluxErr'].values) < 2
+
+    # print info how many points are affected
+    print('There are %d points of %d that have SNR<2' %(np.sum(mask),len(mask)))
+
+    # set flag at those rows to 1
+    fp_data.ix[mask, 'flagFaint'] = 1
+
+    # make new columns for  Mean  Median  2 sigma...
+    fp_data['faintMean'] = np.nan
+    fp_data['faintMedian'] = np.nan
+    fp_data['faintTwoSigma'] = np.nan
+    fp_data['faintRMS'] = np.nan
+    # calculate the faint replacement only for faint points...
+    print('Faint points treatment...')
+    fp_data.ix[mask, 'faintMean'] = faintF.calculate_mean(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
+    fp_data.ix[mask, 'faintMedian'] = faintF.calculate_median(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
+    fp_data.ix[mask, 'faintTwoSigma'] = faintF.calculate_2sigma(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
+    fp_data.ix[mask, 'faintRMS'] = faintF.calculate_rms(fp_data['psfFlux'][mask].values,fp_data['psfFluxErr'][mask].values)
+    
+    ##########  STEP 2 : Derived Quantities ###########  
+    #
+
+    ####  replace all psfFlux  where SNR < 2  with  faintMean  
+    rows = fp_data['flagFaint'] == 1
+    fp_data.ix[rows, 'psfFlux'] = fp_data.ix[rows, 'faintMean']
+    
+    def flux2absigma(flux, fluxsigma):
+      """Compute AB mag sigma given flux and flux sigma"""
+      FIVE_OVER_2LOG10 = 1.085736204758129569
+      return FIVE_OVER_2LOG10 * fluxsigma / flux;
+
+
+    def flux2ab(flux):
+      """Compute AB mag given flux"""
+      return -2.5 * np.log10(flux) - 48.6;
+    
+    # Calculate psfMag , psfMagErr from psfFlux,  psfFluxErr
+
+    fp_data['psfMag'] = flux2ab(fp_data['psfFlux'])
+    fp_data['psfMagErr'] = flux2absigma(fp_data['psfFlux'],fp_data['psfFluxErr'])
+
+
+    # group by objectId to calculate full LC variability characteristics 
+    print('Calculating the full LC statistics...')
+    grouped = fp_data.groupby('objectId')
+
+    # Calculate only sigmaFullMag  muFullMag   for full lightcurves from 
+    # magnitudes     
+    varMetricsFull = grouped.apply(varF.computeVarMetricsMagOnly)
+    print('Calculating metrics for full lightcurves is finished')
+
+   
+    path = DirOut +'Var/'+ 'VarSigMag'+name
+    print('Saving varMetricsFull...')
+    varMetricsFull.to_csv(path)
+    print('Saved Full, unbinned  LC statistics to %s'%path)
+
+
+
 
 

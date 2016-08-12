@@ -49,7 +49,7 @@ def approximate_mu_sigma(xi, ei, axis=None):
 
 
 
-def get_mu_sigma(xi,ei, N_boot=1000):
+def get_mu_sigma(xi,ei, N_boot=1000, return_plot_data = False):
     ''' A short function
     to calculate a full mu, sigma, based 
     on N_boot bootstraps of the given sample
@@ -82,8 +82,8 @@ def get_mu_sigma(xi,ei, N_boot=1000):
     # using as boundaries the minimum and maximum result of the 
     # bootstrapped approximate calculation 
  
-    max_factor = 1.0
-    sigma = np.linspace(min(sigma_boot), max_factor*max(sigma_boot), 70)
+    max_factor = 1.0  # min(sigma_boot) 
+    sigma = np.linspace(0, max_factor*max(sigma_boot), 70)
     mu = np.linspace(min(mu_boot), max_factor*max(mu_boot), 70)
     
     if (len(mu) == 0) | (len(sigma) == 0) : 
@@ -93,7 +93,38 @@ def get_mu_sigma(xi,ei, N_boot=1000):
         logL = gaussgauss_logL(xi, ei, mu, sigma[:, np.newaxis])
         logL -= logL.max()
         ind = np.where(logL == np.max(logL))
-    
+        
+        # follow this branch if want to get plot quantities  
+        if return_plot_data == True : 
+	    L = np.exp(logL)
+	    p_sigma = L.sum(1)
+	    p_sigma /= (sigma[1] - sigma[0]) * p_sigma.sum() # normalize p(sigma) by the integral over all distribution
+		    
+	    p_mu = L.sum(0)
+	    p_mu /= (mu[1] - mu[0]) * p_mu.sum()
+
+            plot_data = {}
+            plot_data['mu'] = mu
+            plot_data['p_mu'] = p_mu
+            plot_data['sigma'] = sigma
+	    plot_data['p_sigma'] = p_sigma
+	    plot_data['mu_boot'] = mu_boot
+	    plot_data['sigma_boot'] = sigma_boot
+	    plot_data['logL'] = logL
+	    plot_data['mu_max'] = mu[ind[1]][0]
+	    plot_data['sigma_max'] =  sigma[ind[0]][0]
+	  
+	    if len(ind) < 2: 
+                # for some reason, we may be unable to find the maximum...
+                return plot_data, np.nan, np.nan
+		
+	    else : 
+	        # return the mu and sigma at the maximum of the likelihood
+	        # (note : I assume log-likelihood is smooth, and has only 
+	        # one maximum )
+	        return plot_data, mu[ind[1]][0], sigma[ind[0]][0]
+        
+        # follow this branch if plot quantities not needed 
         if len(ind) < 2  : 
             # for some reason, we may be unable to find the maximum...
             return np.nan, np.nan
@@ -298,6 +329,122 @@ def ComputeVarFullBinned(group):
 
 
 # http://stackoverflow.com/questions/18603270/progress-indicator-during-pandas-operations-python
+
+
+
+def computeVarMetricsTestSigma(group):
+    ''' Variability metrics to compute for each object on full lightcurve  / 
+    all points in a given season 
+    
+    '''
+    # print diagnostic for figuring out error...
+    print 'objectId= ', group['objectId'].values[0]
+    
+    # even though I drop NaNs before, I do it here explicitly to save 
+    # me from headaches 
+    # eg. obj  216199180459189485   
+    # have one row with NaN , not caught by other filters... 
+    # and for some reason, can't use here  group.dropna(..., inplace=True) !   
+    # group.dropna(subset=['psfFlux', 'psfFluxErr'], inplace=True)
+    group = group.replace([np.inf, -np.inf, 0], np.nan)
+    group = group.dropna(subset=['psfFlux', 'psfFluxErr'])
+    
+    
+    # calculate range    dates in a given lightcurve    
+    rangeMJD = group['mjd'].values.max() - group['mjd'].values.min() 
+    
+    
+    Flux = group['psfFlux'].values
+    FluxErr = group['psfFluxErr'].values
+    Mag = group['psfMag'].values
+    MagErr = group['psfMagErr'].values
+
+    # calculate Weighted  Mean
+     
+    FluxMean = calcWeightedMean(Flux,FluxErr)
+    FluxMeanErr = calcWeightedMeanErr(FluxErr)
+    psfFluxStDev = calcWeightedStDev(Flux,FluxErr, FluxMean)
+
+    # calculate Median error : not necessary (since it's just const * meanErr)
+    # medianErr = np.sqrt(np.pi / 2.0) * FluxMeanErr
+
+    # note  : get_mu_sigma() gets digestion problems with NaN's - make sure 
+    # that Flux and FluxErr are free of NaN's ! 
+    # I multiply flux by a factor for stability issues    
+    N = len(Flux)
+    if N == 0 : 
+        mu = np.nan
+        sigma = np.nan
+        muMag = np.nan
+        sigmaMag = np.nan
+    elif N == 1  :
+        mu, sigma = Flux[0], 0
+        muMag, sigmaMag = Mag[0], 0
+    else : 
+        mu, sigma = get_mu_sigma(Flux*1e27, FluxErr*1e27,1000)
+        muMag , sigmaMag = get_mu_sigma(Mag, MagErr,1000)
+
+    # set the flag about length...
+    if N > 10 : 
+        flagLtTenPts = np.nan
+    else:
+        flagLtTenPts = 1 
+   
+    
+    return pd.Series({'N':group['psfFlux'].count(),
+                      'psfFluxMean': FluxMean,
+                      'psfFluxMeanErr' : FluxMeanErr,
+                      'psfFluxMedian': calcMedian(Flux),
+                      'psfFluxMedianErr': np.sqrt(np.pi / 2)*FluxMeanErr,
+                      'psfFluxSkew' : group['psfFlux'].skew(),
+                      'psfFluxSigG' : calcSigmaG(Flux),
+                      'psfFluxStDev':psfFluxStDev,
+                      'chi2DOF' : calcChi2raw(Flux,FluxErr),
+                      'chi2R' : calcChi2robust(Flux,FluxErr),
+                      'sigmaFull' :sigma,
+                      'muFull' :mu,
+                      'sigmaFullMag':sigmaMag,
+                      'muFullMag':muMag,
+                      'avgMJD' : group['mjd'].mean(),
+                      'rangeMJD' : rangeMJD,
+                      'flagLtTenPts' : flagLtTenPts
+                     })
+
+def computeVarMetricsMagOnly(group):
+    ''' Variability metrics to compute for each object on full lightcurve  / 
+    all points in a given season 
+    
+    '''
+    # print diagnostic for figuring out error...
+    # print 'objectId= ', group['objectId'].values[0]
+    
+    # even though I drop NaNs before, I do it here explicitly to save 
+    # me from headaches 
+    # eg. obj  216199180459189485   
+    # have one row with NaN , not caught by other filters... 
+    # and for some reason, can't use here  group.dropna(..., inplace=True) !   
+    # group.dropna(subset=['psfFlux', 'psfFluxErr'], inplace=True)
+    group = group.replace([np.inf, -np.inf, 0], np.nan)
+    group = group.dropna(subset=['psfFlux', 'psfFluxErr'])
+    
+    
+    Mag = group['psfMag'].values
+    MagErr = group['psfMagErr'].values
+
+    # calculate Weighted  Mean
+  
+    N = len(Mag)
+    if N == 0 : 
+        muMag, sigmaMag = np.nan,np.nan
+    elif N == 1  :
+        muMag, sigmaMag = Mag[0], 0
+    else : 
+        muMag , sigmaMag = get_mu_sigma(Mag, MagErr,1000)
+  
+    
+    return pd.Series({'sigmaFullMag':sigmaMag,
+                      'muFullMag':muMag})
+
 
 
 def logged_apply(g, func, *args, **kwargs):

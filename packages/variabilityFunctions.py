@@ -83,6 +83,7 @@ def get_mu_sigma(xi,ei, N_boot=1000, return_plot_data = False):
     # bootstrapped approximate calculation 
  
     max_factor = 1.0  # min(sigma_boot) 
+
     sigma = np.linspace(0, max_factor*max(sigma_boot), 70)
     mu = np.linspace(min(mu_boot), max_factor*max(mu_boot), 70)
     
@@ -94,42 +95,50 @@ def get_mu_sigma(xi,ei, N_boot=1000, return_plot_data = False):
         logL -= logL.max()
         ind = np.where(logL == np.max(logL))
         
+
         # follow this branch if want to get plot quantities  
         if return_plot_data == True : 
-	    L = np.exp(logL)
-	    p_sigma = L.sum(1)
-	    p_sigma /= (sigma[1] - sigma[0]) * p_sigma.sum() # normalize p(sigma) by the integral over all distribution
-		    
-	    p_mu = L.sum(0)
-	    p_mu /= (mu[1] - mu[0]) * p_mu.sum()
+            L = np.exp(logL)
+            p_sigma = L.sum(1)
+            p_sigma /= (sigma[1] - sigma[0]) * p_sigma.sum() # normalize p(sigma) by the integral over all distribution
+            p_mu = L.sum(0)
+            p_mu /= (mu[1] - mu[0]) * p_mu.sum()
 
             plot_data = {}
             plot_data['mu'] = mu
             plot_data['p_mu'] = p_mu
             plot_data['sigma'] = sigma
-	    plot_data['p_sigma'] = p_sigma
-	    plot_data['mu_boot'] = mu_boot
-	    plot_data['sigma_boot'] = sigma_boot
-	    plot_data['logL'] = logL
-	    plot_data['mu_max'] = mu[ind[1]][0]
-	    plot_data['sigma_max'] =  sigma[ind[0]][0]
-	  
-	    if len(ind) < 2: 
-                # for some reason, we may be unable to find the maximum...
+            plot_data['p_sigma'] = p_sigma
+            plot_data['mu_boot'] = mu_boot
+            plot_data['sigma_boot'] = sigma_boot
+            plot_data['logL'] = logL
+            plot_data['mu_max'] = mu[ind[1]][0]
+            plot_data['sigma_max'] =  sigma[ind[0]][0]
+    	  
+            if len(ind) < 2: 
+            # for some reason, we may be unable to find the maximum...
                 return plot_data, np.nan, np.nan
-		
-	    else : 
-	        # return the mu and sigma at the maximum of the likelihood
-	        # (note : I assume log-likelihood is smooth, and has only 
-	        # one maximum )
-	        return plot_data, mu[ind[1]][0], sigma[ind[0]][0]
+            else : 
+                # check if last element of array...
+                if ind[1][0] == len(mu)-1:
+                    print('mu at the last grid point')
+                if ind[0][0] ==  len(sigma)-1:
+                    print('sigma at the last grid point')
+    	        # return the mu and sigma at the maximum of the likelihood
+    	        # (note : I assume log-likelihood is smooth, and has only 
+    	        # one maximum )
+                return plot_data, mu[ind[1]][0], sigma[ind[0]][0]
         
         # follow this branch if plot quantities not needed 
         if len(ind) < 2  : 
             # for some reason, we may be unable to find the maximum...
             return np.nan, np.nan
-              
-        else : 
+        else :  
+            #check if last element of array...
+            if ind[1][0] == len(mu)-1 :
+                    print('mu at the last grid point')
+            if ind[0][0] == len(sigma)-1 :
+                    print('sigma at the last grid point')
             # return the mu and sigma at the maximum of the likelihood
             # (note : I assume log-likelihood is smooth, and has only 
             # one maximum )
@@ -338,7 +347,7 @@ def computeVarMetricsTestSigma(group):
     
     '''
     # print diagnostic for figuring out error...
-    print 'objectId= ', group['objectId'].values[0]
+    print('objectId= %d', group['objectId'].values[0])
     
     # even though I drop NaNs before, I do it here explicitly to save 
     # me from headaches 

@@ -100,8 +100,12 @@ def get_mu_sigma(xi,ei, N_boot=1000, return_plot_data = False):
         if return_plot_data == True : 
             L = np.exp(logL)
             p_sigma = L.sum(1)
-            p_sigma /= (sigma[1] - sigma[0]) * p_sigma.sum() # normalize p(sigma) by the integral over all distribution
+
+            # normalize p(sigma) by the integral over all distribution
+            p_sigma /= (sigma[1] - sigma[0]) * p_sigma.sum() 
             p_mu = L.sum(0)
+
+            # normalize p(mu) by the integral over all distribution
             p_mu /= (mu[1] - mu[0]) * p_mu.sum()
 
             plot_data = {}
